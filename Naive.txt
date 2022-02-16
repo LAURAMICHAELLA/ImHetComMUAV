@@ -1,0 +1,2 @@
+(size, throughput, signal, SNR, Human class)-----ML prediction, Score 
+1170.933350 0.000768 3.505361 0.037120 0.000000 ------- 0.000000 100.000000 

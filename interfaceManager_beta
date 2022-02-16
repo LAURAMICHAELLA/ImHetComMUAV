@@ -1,0 +1,249 @@
+#include "string.h"
+#include "ns3/core-module.h"
+#include "ns3/propagation-module.h"
+#include "ns3/network-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/wifi-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/flow-monitor-module.h"
+
+using namespace ns3;
+uint32_t macTxDropCount(0), phyTxDropCount(0), phyRxDropCount(0);
+
+void MacTxDrop(Ptr<const Packet> p)
+{
+    macTxDropCount++;
+}
+
+void PhyTxDrop(Ptr<const Packet> p)
+{
+    phyTxDropCount++;
+}
+
+void PhyRxDrop(Ptr<const Packet> p)
+{
+    phyRxDropCount++;
+}
+void ResetDropCounters()
+{
+    macTxDropCount = 0;
+    phyTxDropCount = 0;
+    phyRxDropCount = 0;
+}
+
+void experiment(uint32_t &numberOfUEs, const std::string phyMode1, const std::string phyMode2)
+{
+    // 1. Create nodes
+    NodeContainer ueNode;
+    ueNode.Create (numberOfUEs);
+
+    std::cout << "Node Containers created, for " << numberOfUEs << "nodes clients!" << std::endl;
+
+    // 2. Place nodes
+
+    MobilityHelper mobility;
+    double distance = 5;
+    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+    for (uint16_t i = 0; i < numberOfUEs; i++)
+      {
+  	positionAlloc->Add (Vector(distance * i, 0, 0));
+      }
+    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+    mobility.SetPositionAllocator (positionAlloc);
+    mobility.Install(ueNode);
+
+    std::cout << "Mobility installed" << std::endl;
+
+    // 3. Create propagation loss matrix
+    Ptr<MatrixPropagationLossModel> lossModel = CreateObject<MatrixPropagationLossModel> ();
+    lossModel->SetDefaultLoss (200); // set default loss to 200 dB (no link)
+    for (size_t i = 0; i < numberOfUEs; ++i)
+    {
+        lossModel->SetLoss (nodes.Get (i)-> GetObject<MobilityModel>(), nodes.Get (i+1)->GetObject<MobilityModel>(), 50); // set symmetric loss i <-> i+1 to 50 dB
+    }
+
+    // 4. Create & setup wifi channel
+    Ptr<YansWifiChannel> wifiChannel = CreateObject <YansWifiChannel> ();
+    wifiChannel->SetPropagationLossModel (lossModel);
+    wifiChannel->SetPropagationDelayModel (CreateObject <ConstantSpeedPropagationDelayModel> ());
+
+    YansWifiChannelHelper channelWave = YansWifiChannelHelper::Default ();
+    channelWave.AddPropagationLoss("ns3::RangePropagationLossModel","MaxRange",DoubleValue(100));
+    channelWave.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
+
+
+    // 5. Install PHY Layer of wireless devices
+
+    // IEEE 802.11n 5GHz
+    WifiHelper wifi;
+    if (verbose) {
+        wifi.EnableLogComponents ();  // Turn on all Wifi logging
+    }
+    wifi.SetStandard (WIFI_PHY_STANDARD_80211n_5GHZ);
+
+    YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
+    wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
+    wifiPhy.SetChannel (channel.Create ());
+    wifiPhy.Set ("ChannelNumber", UintegerValue (36));
+    wifiPhy.SetChannel (wifiChannel);
+
+    // IEEE 802.11P 5GHz
+
+    Wifi80211pHelper wifi80211p = Wifi80211pHelper::Default ();
+
+
+    NqosWaveMacHelper wifi80211pMac = NqosWaveMacHelper::Default ();
+
+
+    //YansWifiChannelHelper channelWave = YansWifiChannelHelper::Default ();
+
+    wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11);
+    wifiPhy.SetChannel (channelWave.Create ());
+    wifi80211p.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                        "DataMode",StringValue (phyMode2),
+                                        "ControlMode",StringValue (phyMode2));
+
+    wifiPhy.Set("ChannelNumber", UintegerValue(172));
+
+
+
+
+
+    NetDeviceContainer waveDevices = wifi80211p.Install (wifiPhy, wifi80211pMac, ueNode);
+
+
+
+
+
+    // 5. Install MAC Layer of wireless devices
+
+    // IEEE 802.11n 5GHz
+    WifiMacHelper wifiMac;
+    wifiMac.SetType ("ns3::AdhocWifiMac");
+
+
+
+    wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode",StringValue (phyMode1),
+                                "ControlMode",StringValue (phyMode1));
+
+    NetDeviceContainer wifiDevices = wifi.Install (wifiPhy, wifiMac, nodes);
+
+    //// Enable pcap?
+    ////wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
+    ////wifiPhy.EnablePcap ("exposed-terminal", nodes);
+
+    // IEEE 802.11p 5GHz
+
+
+    // 6. Install TCP/IP stack & assign IP addresses
+    InternetStackHelper internet;
+    internet.Install (nodes);
+    Ipv4AddressHelper ipv4;
+    ipv4.SetBase ("10.0.0.0", "255.0.0.0");
+    ipv4.Assign (devices);
+
+    // 7.1 Install applications: two CBR streams
+    ApplicationContainer cbrApps;
+    OnOffHelper onOffHelper ("ns3::UdpSocketFactory", Address());
+    onOffHelper.SetAttribute ("PacketSize", UintegerValue (500));
+    onOffHelper.SetAttribute ("OnTime",  StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
+    onOffHelper.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
+    onOffHelper.SetAttribute ("DataRate", StringValue (datarate));
+
+    //// flow 1:  node 1 -> node 0
+    onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.0)));
+    onOffHelper.SetAttribute ("Remote", AddressValue(InetSocketAddress (Ipv4Address ("10.0.0.1"),9000)));
+    cbrApps.Add (onOffHelper.Install (nodes.Get (1)));
+
+    //// flow 2:  node 2 -> node 3
+    onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.0)));
+    onOffHelper.SetAttribute ("Remote", AddressValue(InetSocketAddress (Ipv4Address ("10.0.0.4"),9000)));
+    cbrApps.Add (onOffHelper.Install (nodes.Get (2)));
+
+    // 7.2 Install applications: two UDP sinks
+    ApplicationContainer sinkApps;
+    PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 9000));
+    sinkApps.Add (packetSinkHelper.Install (nodes.Get (0)));
+    sinkApps.Add (packetSinkHelper.Install (nodes.Get (3)));
+
+    // 8.1 Install FlowMonitor on all nodes
+    FlowMonitorHelper flowmon;
+    Ptr<FlowMonitor> monitor = flowmon.InstallAll ();
+
+    // 8.2 Monitor collisions
+//    Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacTxDrop));
+//    Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxDrop", MakeCallback(&PhyRxDrop));
+//    Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyTxDrop", MakeCallback(&PhyTxDrop));
+
+    // 9. Run simulation for 150 seconds
+    Simulator::Stop (Seconds (150));
+    Simulator::Run ();
+
+    // 10. Print statistics
+    monitor->CheckForLostPackets ();
+    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
+    FlowMonitor::FlowStatsContainer stats = monitor->GetFlowStats ();
+    for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
+    {
+        std::cout << i->second.txPackets << ";" << i->second.rxPackets << ";";
+        std::cout << i->second.txBytes << ";" << i->second.rxBytes << ";";
+    }
+    std::cout << (macTxDropCount + phyTxDropCount + phyRxDropCount) << "\n";
+    // Collisions should be in phyRxDropCount, as Yans wifi set collided frames snr on reception, but it's not possible to differentiate from propagation loss. In this experiment, this is not an issue.
+
+    //// Export flowmon data?
+    ////monitor->SerializeToXmlFile("exposed-terminal.flowmon", true, true);
+
+    // 11. Cleanup
+    Simulator::Destroy ();
+    ResetDropCounters();
+}
+
+
+
+int main (int argc, char *argv[])
+{
+    // Defaults
+    double duration = 20; //seconds
+    uint32_t numberOfUEs=4; //Default number of UEs attached to each eNodeB
+    bool verbose = false;
+    uint32_t packetSize = 1472; // bytes
+    double m_txp=100; ///< distance
+
+
+    // For Wifi Network
+    std::string phyMode1 ("DsssRate1Mbps");
+    //For Wave Network
+    std::string phyMode2 ("OfdmRate6MbpsBW10MHz");
+
+    size_t runs = 10;
+
+    // Parse command line
+    CommandLine cmd;
+    cmd.AddValue ("simulationTime", "Simulation time in seconds", duration);
+    cmd.AddValue("numberOfNodes", "Amount of nodes. Default: 4", numberOfUEs);
+    cmd.AddValue ("verbose", "turn on all WifiNetDevice ans WavwNetDevice log components", verbose);
+    cmd.AddValue ("packetSize", "Define size of packets", packetSize);
+    cmd.AddValue ("txWiFi", "Define WiFi transmission rate", phyMode1);
+    cmd.AddValue ("txWave", "Define Wave transmission rate", phyMode2);
+    cmd.AddValue("runs", "Run count. Default: 10.", runs);
+    cmd.Parse (argc, argv);
+
+    Ptr<WifiPhyStats> m_wifiPhyStats; ///< wifi phy statistics
+    m_wifiPhyStats = CreateObject<WifiPhyStats> ();
+    void ReceivesPacket (std::string context, Ptr <const Packet> p);
+
+    // Run experiment
+    std::cout << "Starting!" << std::endl;
+  //  std::cout << "F1 Tx Packets;F1 Rx Packets;F1 Tx Bytes;F1 Rx Bytes;F2 Tx Packets;F2 Rx Packets;F2 Tx Bytes;F2 Rx Bytes;Collisions\n";
+    for (size_t i = 0; i < runs; ++i)
+    {
+        experiment(numberOfUEs, phyMode1, phyMode2);
+
+    }
+
+    return 0;
+
+}

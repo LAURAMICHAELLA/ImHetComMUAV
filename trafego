@@ -1,0 +1,147 @@
+//    onOffHelper.SetAttribute ("MaxBytes", UintegerValue (1000000)); //    "The total number of bytes to send. Once these bytes are sent,                               "no packet is sent again, even in on state. The value zero means "
+  //                                   that there is no limit."
+            // onOffHelper.AddAttribute ("EnableSeqTsSizeHeader", BooleanValue (true)); // "Enable use of SeqTsSizeHeader for sequence number and timestamp",
+            // onOffHelper1.AddAttribute ("EnableSeqTsSizeHeader", BooleanValue (true)); // "Enable use of SeqTsSizeHeader for sequence number and timestamp",
+            // onOffHelper2.AddAttribute ("EnableSeqTsSizeHeader", BooleanValue (true)); // "Enable use of SeqTsSizeHeader for sequence number and timestamp",
+
+
+            // onOffHelper.AddTraceSource("TxWithSeqTsSize", "ns3::PacketSink::SeqTsSizeCallback");
+            // onOffHelper1.AddTraceSource("TxWithSeqTsSize", "ns3::PacketSink::SeqTsSizeCallback");
+            // onOffHelper2.AddTraceSource("TxWithSeqTsSize", "ns3::PacketSink::SeqTsSizeCallback");
+
+
+            //.AddTraceSource ("Tx", "A new packet is created and is sent",
+                             //MakeTraceSourceAccessor (&OnOffApplication::m_txTrace),
+                             //"ns3::Packet::TracedCallback")
+          //  .AddTraceSource ("TxWithAddresses", "A new packet is created and is sent",
+              //               MakeTraceSourceAccessor (&OnOffApplication::m_txTraceWithAddresses),
+                //             "ns3::Packet::TwoAddressTracedCallback")
+            // .AddTraceSource ("TxWithSeqTsSize",               //"A new packet is created with SeqTsSizeHeader",
+            //                  MakeTraceSourceAccessor (&OnOffApplication::m_txTraceWithSeqTsSize),
+            //                  "ns3::PacketSink::SeqTsSizeCallback")
+            //
+            //                   ns3::PacketSink::SeqTsSizeCallback
+
+      //    Config::Connect("/NodeList/*/DeviceList/*/$ns3::PacketSink::SeqTsSizeCallback",MakeCallback(&TxWithSeqTsSize));
+
+
+
+
+
+
+
+
+
+
+
+
+
+ApplicationContainer sourceApplications, sinkApplications;
+          std::vector<uint8_t> tosValues = {0x70}; //AC_BE, AC_BK, AC_VI, AC_VO , 0x28, 0xb8, 0xc0
+          uint32_t portNumber = 100;
+
+            //  for (uint32_t index = 1; index < nWifi; ++index)
+            //  {
+                for (uint8_t tosValue : tosValues)
+                  {
+
+                    auto ipv4 = ueNode.Get (1)->GetObject<Ipv4> ();
+                    const auto address = ipv4->GetAddress (1, 0).GetLocal ();
+
+                    InetSocketAddress sinkSocket (address, portNumber++);
+
+
+                    sinkSocket.SetTos (tosValue);
+
+
+                    OnOffHelper onOffHelper ("ns3::UdpSocketFactory", sinkSocket);
+                    onOffHelper.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
+                    onOffHelper.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+                    onOffHelper.SetAttribute ("DataRate", DataRateValue (50000000 / numberOfUEs));
+                    onOffHelper.SetAttribute ("PacketSize", UintegerValue (pktSize)); //bytes
+                //    onOffHelper.SetAttribute ("MaxBytes", UintegerValue (1000000));
+
+                    PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", sinkSocket);
+                    sinkApplications.Add (packetSinkHelper.Install (ueNode.Get (1)));
+
+                for (uint32_t i=0; i < ueNode.GetN ();i++){
+                            sourceApplications.Add (onOffHelper.Install (ueNode.Get (i)));
+                          }
+                  }
+                  sinkApplications.Start (Seconds (0.0));
+                  sinkApplications.Stop (Seconds (duration+5));
+                  sourceApplications.Start (Seconds (0.1));
+
+              ApplicationContainer sourceApplications2, sinkApplications2;
+              uint32_t portNumber2 = 200;
+
+              //  for (uint32_t index = 1; index < nWifi; ++index)
+              //  {
+                  for (uint8_t tosValue : tosValues)
+                    {
+
+                      auto ipv4 = ueNode.Get (1)->GetObject<Ipv4> ();
+                      const auto address2 = ipv4->GetAddress (2, 0).GetLocal ();
+                      InetSocketAddress sinkSocket2 (address2, portNumber2++);
+
+                      sinkSocket2.SetTos (tosValue);
+
+                      OnOffHelper onOffHelper2 ("ns3::UdpSocketFactory", sinkSocket2);
+                      onOffHelper2.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
+                      onOffHelper2.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+                      onOffHelper2.SetAttribute ("DataRate", DataRateValue (50000000 / numberOfUEs));
+                      onOffHelper2.SetAttribute ("PacketSize", UintegerValue (pktSize)); //bytes
+                  //    onOffHelper.SetAttribute ("MaxBytes", UintegerValue (1000000));
+
+                      PacketSinkHelper packetSinkHelper2 ("ns3::UdpSocketFactory", sinkSocket2);
+
+                      sinkApplications2.Add (packetSinkHelper2.Install (ueNode.Get (1)));
+
+                  for (uint32_t i=0; i < ueNode.GetN ();i++){
+                              sourceApplications2.Add (onOffHelper2.Install (ueNode.Get (i)));
+
+                            // source
+                  }
+
+              }
+
+          sinkApplications2.Start (Seconds (0.0));
+          sinkApplications2.Stop (Seconds (duration+5));
+          sourceApplications2.Start (Seconds (0.1));
+
+          ApplicationContainer sourceApplications3, sinkApplications3;
+          uint32_t portNumber3 = 300;
+
+          //  for (uint32_t index = 1; index < nWifi; ++index)
+          //  {
+              for (uint8_t tosValue : tosValues)
+                {
+
+                  auto ipv4 = ueNode.Get (1)->GetObject<Ipv4> ();
+                  const auto address3 = ipv4->GetAddress (3, 0).GetLocal ();
+                  InetSocketAddress sinkSocket3 (address3, portNumber3++);
+
+                  sinkSocket3.SetTos (tosValue);
+
+                  OnOffHelper onOffHelper3 ("ns3::UdpSocketFactory", sinkSocket3);
+                  onOffHelper3.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
+                  onOffHelper3.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+                  onOffHelper3.SetAttribute ("DataRate", DataRateValue (50000000 / numberOfUEs));
+                  onOffHelper3.SetAttribute ("PacketSize", UintegerValue (pktSize)); //bytes
+              //    onOffHelper.SetAttribute ("MaxBytes", UintegerValue (1000000));
+
+                  PacketSinkHelper packetSinkHelper3 ("ns3::UdpSocketFactory", sinkSocket3);
+
+                  sinkApplications3.Add (packetSinkHelper3.Install (ueNode.Get (1)));
+
+              for (uint32_t i=0; i < ueNode.GetN ();i++){
+                          sourceApplications3.Add (onOffHelper3.Install (ueNode.Get (i)));
+
+                        // source
+              }
+
+          }
+
+          sinkApplications3.Start (Seconds (0.0));
+          sinkApplications3.Stop (Seconds (duration+5));
+          sourceApplications3.Start (Seconds (0.1));
